@@ -5,8 +5,13 @@ CONF = {
 
 
 GITHUB_REPOS = {
-    'murano': 'stackforge/murano',
-    'murano-dashboard': 'stackforge/murano-dashboard',
+    'stackforge': (
+        'murano',
+        'murano-dashboard'
+    ),
+    'murano-project': (
+        'murano-app-incubator'
+    ),
 }
 
 
