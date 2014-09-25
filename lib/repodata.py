@@ -4,7 +4,7 @@ import time
 
 from sh import awk
 from sh import grep_dctrl
-from sh import zcat
+from sh import gzip
 from sh import rm
 from sh import wget
 from sh import repoquery
@@ -16,27 +16,40 @@ from tempfile import mkdtemp
 
 from lxml import etree
 
+from utils import pushd
+
+from urlparse import urlparse
+
 import settings as conf
 
 
+class RepositoryUrl():
+    def __init__(self, dist='ubuntu'):
+        pass
+
+
 class Repodata():
-    def __init__(self, name):
-        self.name = name
-        self.base_url = ''
-        self.repo_url = ''
+    def __init__(self, url, base_path=None):
+        # Base path where files related to the repository are located
+        self.base_path = base_path if base_path else conf.CONF['cache_dir']
+        self.path = ''
+        # Main index file of the repository
         self.index_file = ''
-        self.cache_dir = mkdtemp(dir=conf.CONF['cache_dir'])
+
         self.cache_uuid = uuid4()
         self.cache_threshold_sec = 60 * 60
+
         self.broken = False
-        print("")
-        print("Caching data for repository '{0}'".format(name))
+        self.url = urlparse(url=url)
+
+        self.repo_url = ''
 
     def grep_package(self, name, pattern=None):
         pass
 
     def test_cache(self):
-        index_file_path = os.path.join(self.cache_dir, self.index_file)
+        index_file_path = os.path.join(self.path, self.index_file)
+        print("Testing index file '{0}'".format(self.path))
         if os.path.exists(index_file_path):
             file_age = time.time() - os.path.getctime(index_file_path)
             if file_age > self.cache_threshold_sec:
@@ -54,7 +67,7 @@ class Repodata():
 
     def __str__(self):
         index_file_url = '/'.join([self.repo_url, self.index_file])
-        index_file_path = os.path.join(self.cache_dir, self.index_file)
+        index_file_path = os.path.join(self.path, self.index_file)
 
         return "Remote URL: {0}, Cached file: {1}".format(
             index_file_url,
@@ -63,45 +76,56 @@ class Repodata():
 
 
 class DebMetadata(Repodata):
-    def __init__(self, name):
-        Repodata.__init__(self, name=name)
-        self.index_file = 'Packages.gz'
+    def __init__(self, url, codename='precise', arch='amd64', component='main', base_path=None):
+        Repodata.__init__(self, url=url, base_path=base_path)
+
+        self.index_file = 'Packages'
+
+        self.path = os.path.normpath(os.path.join(self.base_path, self.url.netloc, '.' + self.url.path,
+                                                  codename, component, 'binary-' + arch))
+
+        self.repo_url = '/'.join([self.url.geturl(), 'dists', codename, component, 'binary-' + arch])
 
     def grep_package(self, name, pattern=None):
-        pattern = pattern if pattern else "(^|-){0}$"
+        pattern = pattern if pattern else "{0}"
         try:
             return [
                 line.rstrip().split(' ', 1)
                 for line in awk(
                     grep_dctrl(
-                        zcat(os.path.join(self.cache_dir, self.index_file)),
-                        '-F', 'Package',
-                        '-e', pattern.format(name),
-                        '-s', 'Package,Version'
+                        '--field', 'Package,Provides',
+                        '--show-field', 'Package,Version',
+                        '--eregex', '--ignore-case',
+                        '--pattern', pattern.format(name),
+                        os.path.join(self.path, self.index_file)
                     ),
                     '/Package/{p=$2;next} /Version/{print p " " $2}'
                 )
             ]
-        except:
+        except Exception as err:
+            print(str(err))
             return []
 
     def update_cache(self):
         if not self.test_cache():
-            rm(self.cache_dir, '-rf')
-            self.cache_dir = mkdtemp(dir=conf.CONF['cache_dir'])
+            rm(self.path, '-rf')
+            mkdir('-p', self.path)
 
-            index_file_url = '/'.join([self.repo_url, self.index_file])
-            index_file_path = os.path.join(self.cache_dir, self.index_file)
+            index_file_url = '/'.join([self.repo_url, 'Packages.gz'])
+            index_file_path = os.path.join(self.path, self.index_file)
 
+            print("Downloading index file '{0}' --> '{1}' ...".format(
+                index_file_url, index_file_path
+            ))
             try:
-                print("Downloading index file '{0}' --> '{1}' ...".format(
-                    index_file_url, index_file_path
-                ))
-                wget(index_file_url, '-O', index_file_path)
-            except:
+                with pushd(self.path):
+                    wget(index_file_url, '-O', self.index_file + '.gz')
+                    gzip('-d', self.index_file + '.gz')
+            except Exception as err:
+                print(str(err))
                 self.broken = True
 
-
+"""
 class RpmRepodata(Repodata):
     def __init__(self, name):
         Repodata.__init__(self, name=name)
@@ -175,3 +199,4 @@ class RpmRepodata(Repodata):
                         wget(url, '-O', path)
             except:
                 self.broken = True
+"""

@@ -25,3 +25,11 @@ KNOWN_PACKAGES = {
         'deb': 'python'
     },
 }
+
+
+PACKAGE_REPOS = {
+    'fuel-5.1-stable': {
+        'deb': 'http://fuel-repository.mirantis.com/fwm/5.1/ubuntu',
+        'rpm': 'http://fuel-repository.mirantis.com/fwm/5.1/centos'
+    }
+}
