@@ -3,7 +3,9 @@
 import argparse
 
 from lib.resolver import GlobalRequirements
-from lib.resolver import PipResolver
+from lib.resolver import GithubRepoDirectory
+from lib.resolver import PythonPackage
+
 from lib.reports import ReportGenerator
 
 import lib.settings as conf
@@ -34,12 +36,12 @@ Cache dir '{2}'
 
 greq = GlobalRequirements(branch=args.greq_branch)
 
-reqs = PipResolver()
-reqs.resolve_from_dir(args.git_dir)
+repo = GithubRepoDirectory(name='oslo.messaging')
+repo.status(long=True, show=True)
 
-validation_result = reqs.validate(greq)
+python_package = PythonPackage(path=repo.path)
+python_package.resolve_deps()
+result = python_package.validate_requirements(greq)
 
-report = ReportGenerator(package_name=reqs.package_name)
-report.machine_friendly_report(validation_result=validation_result)
-
-
+report = ReportGenerator(package_name=python_package.package_name)
+report.machine_friendly_report(validation_result=result)

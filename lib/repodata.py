@@ -9,17 +9,12 @@ from sh import rm
 from sh import wget
 from sh import repoquery
 from sh import mkdir
-from sh import git
 
 from uuid import uuid4
 
 from tempfile import mkdtemp
 
 from lxml import etree
-
-from urlparse import urlparse
-
-from utils import pushd
 
 import settings as conf
 
@@ -180,63 +175,3 @@ class RpmRepodata(Repodata):
                         wget(url, '-O', path)
             except:
                 self.broken = True
-
-
-class GithubRepo():
-    def __init__(self, project=None, name=None, branch='master', url=None):
-        if url:
-            parts = urlparse(url=url).split('/')
-            self.name = parts[-1]
-            self.project = parts[-2]
-        elif name and project:
-            self.name = name
-            self.project = project
-        elif name:
-            project_list = []
-            for key, value in conf.GITHUB_REPOS.items():
-                if name in list(value):
-                    project_list.append(key)
-
-            if len(project_list) == 1:
-                self.name = name
-                self.project = project_list[0]
-            else:
-                raise Exception("Found '{0}' projects that hold repo '{1}': {2}".format(
-                    len(project_list), name, project_list
-                ))
-        else:
-            raise Exception("Not enough data to create GithubRepo class")
-
-        self.path = '/'.join((self.project, self.name))
-        print("path = {0}".format(self.path))
-        if url:
-            self.url = url
-        else:
-            self.url = "https://github.com/{0}".format(self.path)
-        self.cache_dir = os.path.join(conf.CONF['cache_dir'], self.path)
-        print("cache_dir = {0}".format(self.cache_dir))
-        self.branch = branch
-
-        if self.status():
-            self.update()
-        else:
-            self.clone()
-
-    def update(self):
-        with pushd(self.cache_dir):
-            print("Updating existing repository")
-            git('reset', '--hard')
-            git('clean', '-f', '-d', '-x')
-            git('remote', 'update')
-            git('pull', '--rebase')
-
-    def clone(self):
-        print("Cloning new repository")
-        git('clone', self.url, self.cache_dir)
-
-    def status(self):
-        try:
-            with pushd(self.cache_dir):
-                return git('status', '--short')
-        except:
-            return None

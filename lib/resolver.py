@@ -11,96 +11,87 @@ from sh import python
 
 from getpass import getuser
 
-from utils import pushd
+from urlparse import urlparse
 
-from repodata import GithubRepo
+from utils import pushd
 
 import settings as conf
 
 
-class PythonPackageMeta():
-    def __init__(self, full_name, dependents=None):
-        self._full_name = full_name.split('#')[0].rstrip()
-        self._dependents = dependents
-        self.name = ""
-        self.constraints = []
-        self.parents = []
+class GithubRepoDirectory():
+    def __init__(self, project=None, name=None, branch='master', url=None, base_path=None):
+        if url:
+            parts = urlparse(url=url).split('/')
+            self.name = parts[-1]
+            self.project = parts[-2]
+        elif name and project:
+            self.name = name
+            self.project = project
+        elif name:
+            project_list = []
+            for key, value in conf.GITHUB_REPOS.items():
+                if name in list(value):
+                    project_list.append(key)
 
-        if self._full_name:
-            self.looks_good = True
+            if len(project_list) == 1:
+                self.name = name
+                self.project = project_list[0]
+            else:
+                raise Exception("Found '{0}' projects that hold repo '{1}': {2}".format(
+                    len(project_list), name, project_list
+                ))
         else:
-            self.looks_good = False
-            return
+            raise Exception("Not enough data to create GithubRepo class")
 
-        match = re.search('^(.*?)([<>!=].*)$', self._full_name)
-        if match:
-            self.name = match.group(1)
-            constraint = match.group(2).split(',')
+        if base_path:
+            self.base_path = base_path
         else:
-            self.name = self._full_name
-            constraint = []
+            self.base_path = conf.CONF['cache_dir']
 
-        for c in constraint:
-            match = re.search('^([<>!=]=?)(.*?)$', c)
-            self.constraints.append(
-                [
-                    {
-                        '>': 'gt',
-                        '<': 'lt',
-                        '>=': 'ge',
-                        '<=': 'le',
-                        '==': 'eq',
-                        '!=': 'ne'
-                    }.get(match.group(1), ''),
-                    match.group(2)
-                ]
-            )
+        self.full_name = '/'.join((self.project, self.name))
+        if url:
+            self.url = url
+        else:
+            self.url = "https://github.com/{0}".format(self.full_name)
+        self.path = os.path.join(self.base_path, self.full_name)
+        self.branch = branch
 
-        if self._dependents:
-            for string in self._dependents.split('->'):
-                meta = PythonPackageMeta(string)
-                if meta.looks_good:
-                    self.parents.append(meta)
+        try:
+            if self.status():
+                self.reset()
+            self.update()
+        except:
+            self.clone()
 
-    def __repr__(self):
-        return "(Name: '{0}', Constraints: [{1}], Parents: [{2}])".format(
-            self.name,
-            ' , '.join([':'.join(c) for c in self.constraints]),
-            ' -> '.join([repr(p) for p in self.parents])
-        )
+    def reset(self):
+        with pushd(self.path):
+            print("Updating existing repository")
+            git('reset', '--hard')
+            git('clean', '-f', '-d', '-x')
 
-    def __str__(self):
-        return "{0}{1}".format(self.name, self.str_constraint())
+    def update(self):
+        with pushd(self.path):
+            print("Updating existing repository")
+            git('remote', 'update')
+            git('pull', '--rebase')
 
-    def equals(self, package, strict=False):
-        if self.name != package.name:
-            return False
+    def clone(self):
+        print("Cloning new repository")
+        git('clone', self.url, self.path)
 
-        if len(self.constraints) != len(package.constraints):
-            return False
+    def status(self, long=False, show=False):
+        opts = '--long' if long else '--short'
+        with pushd(self.path):
+            git_status = git('status', opts)
 
-        for c in self.constraints:
-            if not c in package.constraints:
-                return False
+        if show:
+            print("")
+            print("'git status' in '{0}':".format(self.path))
+            print("------------")
+            print(git_status)
+            print("------------")
 
-        return True
-
-    def str_constraint(self):
-        return ','.join(
-            [
-                "{0}{1}".format(
-                    {
-                        'gt': '>',
-                        'lt': '<',
-                        'ge': '>=',
-                        'le': '<=',
-                        'eq': '==',
-                        'ne': '!='
-                    }.get(c[0]), c[1]
-                )
-                for c in self.constraints
-            ]
-        )
+        return git_status
 
 
 class GlobalRequirements():
@@ -129,9 +120,9 @@ class GlobalRequirements():
         print("BTW, cache dir is {0}".format(conf.CONF['cache_dir']))
         resp = urllib2.urlopen(url)
         for line in resp.readlines():
-            meta = PythonPackageMeta(line)
-            if meta.looks_good:
-                self.entries.append(meta)
+            dependency = PythonPackageDependency(line)
+            if dependency.looks_good:
+                self.entries.append(dependency)
         resp.close()
         print("Done. {0} records loaded.".format(len(self.entries)))
 
@@ -152,63 +143,54 @@ class GlobalRequirements():
             return [False, None]
 
 
-class PipResolver():
-    def __init__(self):
-        self._pip_install_opts = ['--no-install', '--verbose']
-        self.package_name = ""
-        self.entries = []
-        pass
+class PythonPackage():
+    def __init__(self, path):
+        if os.path.exists(path):
+            self.path = path
+        else:
+            raise Exception("Path '{0}' does not exist.".format(path))
 
-    def _add_pip_package(self, full_name, dependents=None):
-        package = PythonPackageMeta(full_name, dependents=dependents)
+        self.dependencies = []
+
+        with pushd(self.path):
+            self.package_name = tail(python("setup.py", "--name"), "-1").rstrip()
+
+    def _add_dependency(self, full_name, dependents=None):
+        package = PythonPackageDependency(full_name, dependency_chain=dependents)
         if package.looks_good:
-            self.entries.append(package)
+            self.dependencies.append(package)
 
-    def resolve_from_dir(self, path):
-        self._pip_install_opts.append('-e')
-        if not os.path.exists(path):
-            raise Exception("Path not found '{0}'".format(path))
+    def resolve_deps(self, force=False):
+        if force:
+            self.dependencies = []
+
+        if len(self.dependencies) > 0:
+            return self.dependencies
+
+        pip_install_opts = ['--no-install', '--verbose', '-e']
 
         rm('-r', '-f', "/tmp/pip_build_{0}".format(getuser()))
 
-        with pushd(path):
-            print("")
-            print("'git status' in '{0}':".format(path))
-            print("------------")
-            print(git('status'))
-            print("------------")
-
-            self.package_name = tail(python("setup.py", "--name"), "-1").rstrip()
-
+        with pushd(self.path):
             print("")
             print("Gathering package requirements ...")
-            for line in pip('install', self._pip_install_opts, '.'):
+            for line in pip('install', pip_install_opts, '.'):
                 string = line.rstrip()
-                match = re.search(
-                    'Downloading/unpacking (.*?) \(from (.*?)\)',
-                    string
-                )
+                match = re.search('Downloading/unpacking (.*?) \(from (.*?)\)', string)
                 if match:
-                    self._add_pip_package(match.group(1), dependents=match.group(2))
+                    self._add_dependency(match.group(1), dependents=match.group(2))
                     continue
 
-                match = re.search(
-                    'Requirement already satisfied.*?: (.*?) in .*?\(from (.*?)\)',
-                    string
-                )
+                match = re.search('Requirement already satisfied.*?: (.*?) in .*?\(from (.*?)\)', string)
                 if match:
-                    self._add_pip_package(match.group(1), dependents=match.group(2))
+                    self._add_dependency(match.group(1), dependents=match.group(2))
                     continue
-            print("Done. {0} records found.".format(len(self.entries)))
 
-    def resolve_from_stackforge(self, url):
-        pass
+        print("Done. {0} records found.".format(len(self.dependencies)))
 
-#    def resolve_from_git(self, name, url=None):
-#        repo = GithubRepo(name=name, url=url)
-#        self.resolve_from_dir(repo.cache_dir)
+        return self.dependencies
 
-    def validate(self, global_requirements):
+    def validate_requirements(self, global_requirements):
         """
         Returns a dict of dicts:
             <package name>: {
@@ -218,13 +200,132 @@ class PipResolver():
                 'is_direct_dependency': <if package is a direct dependency for the component>
             }
         """
+        for dependency in self.dependencies:
+            dependency.validate(global_requirements)
+
         result = {}
-        for package in self.entries:
-            status, greq_package = global_requirements.validate(package)
-            result[package.name] = {
-                'orig_package': package,
-                'greq_package': greq_package,
-                'status': status,
-                'is_direct_dependency': self.package_name == package.parents[0].name
+        for dependency in self.dependencies:
+            result[dependency.name] = {
+                'orig_package': dependency,
+                'greq_package': dependency.global_requirement,
+                'status': dependency.global_requirement_status,
+                'is_direct_dependency': self.package_name == dependency.dependencies[0].name
             }
         return result
+
+
+class PythonPackageDependency():
+    def __init__(self, full_name, dependency_chain=None):
+        """
+        :param full_name: A string containing dependency name and version
+        :param dependency_chain: A string that lists packages which require current package
+        :return:
+        """
+        self._full_name = full_name.split('#')[0].rstrip()
+        self._dependency_chain = dependency_chain
+        self.name = ""
+        self.global_requirement = ""
+        self.global_requirement_status = ""
+        self.constraints = None
+        self.dependencies = []
+
+        if self._full_name:
+            self.looks_good = True
+        else:
+            self.looks_good = False
+            return
+
+        self._evaluate()
+
+    def __repr__(self):
+        return "(Name: '{0}', Constraints: [{1}], Parents: [{2}])".format(
+            self.name,
+            ' , '.join([':'.join(c) for c in self.constraints]),
+            ' -> '.join([repr(p) for p in self.dependencies])
+        )
+
+    def __str__(self):
+        return "{0}{1}".format(self.name, self.constraints)
+
+    def _evaluate(self):
+        match = re.search('^(.*?)([<>!=].*)$', self._full_name)
+        if match:
+            self.name = match.group(1)
+            self.constraints = VersionConstraints(match.group(2))
+        else:
+            self.name = self._full_name
+            self.constraints = VersionConstraints()
+
+        if self._dependency_chain:
+            for string in self._dependency_chain.split('->'):
+                dependency = PythonPackageDependency(string)
+                if dependency.looks_good:
+                    self.dependencies.append(dependency)
+
+    def equals(self, dependency, strict=False):
+        if self.name != dependency.name:
+            return False
+
+        return self.constraints.equals(dependency.constraints)
+
+    def validate(self, global_requirements):
+        self.global_requirement_status, self.global_requirement = global_requirements.validate(self)
+
+
+class VersionConstraints():
+    def __init__(self, string=''):
+        self._constraints = []
+
+        for c in string.split(','):
+            match = re.search('^([<>!=]=?)(.*?)$', c)
+            if match:
+                self._constraints.append(
+                    [
+                        {
+                            '>': 'gt',
+                            '<': 'lt',
+                            '>=': 'ge',
+                            '<=': 'le',
+                            '==': 'eq',
+                            '!=': 'ne'
+                        }.get(match.group(1), ''),
+                        match.group(2)
+                    ]
+                )
+
+    def __str__(self):
+        return ','.join(
+            [
+                "{0}{1}".format(
+                    {
+                        'gt': '>',
+                        'lt': '<',
+                        'ge': '>=',
+                        'le': '<=',
+                        'eq': '==',
+                        'ne': '!='
+                    }.get(c[0]), c[1]
+                )
+                for c in self._constraints
+            ]
+        )
+
+    def __contains__(self, item):
+        return item in self._constraints
+
+    def __len__(self):
+        return len(self._constraints)
+
+    def __iter__(self):
+        for c in self._constraints:
+            yield c
+
+    def equals(self, constraints):
+        if len(self) != len(constraints):
+            return False
+
+        for c in constraints:
+            if not c in self:
+                return False
+
+        return True

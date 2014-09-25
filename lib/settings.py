@@ -5,13 +5,16 @@ CONF = {
 
 
 GITHUB_REPOS = {
-    'stackforge': (
+    'stackforge': [
         'murano',
         'murano-dashboard'
-    ),
-    'murano-project': (
+    ],
+    'murano-project': [
         'murano-app-incubator'
-    ),
+    ],
+    'openstack': [
+        'oslo.messaging'
+    ]
 }
 
 

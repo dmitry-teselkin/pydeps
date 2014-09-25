@@ -52,7 +52,7 @@ class ReportGenerator():
         for key in sorted(validation_result.keys()):
             item = validation_result[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
-                str_parents = " -> ".join([str(p) for p in item['orig_package'].parents])
+                str_parents = " -> ".join([str(p) for p in item['orig_package'].dependencies])
 
                 print("{1:35}{0}{2:15}{0}{3:10}{0}{4:35}{0}{5}".format(
                     delimiter,
