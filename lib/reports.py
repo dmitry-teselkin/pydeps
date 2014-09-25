@@ -48,7 +48,7 @@ class ReportGenerator():
         str_compatible = 'compatible' if compatible else 'incompatible'
         delimiter = ";"
 
-        print("#")
+        print("# ---------- {0} {1} dependencies ----------".format(str_compatible, str_direct))
         for key in sorted(validation_result.keys()):
             item = validation_result[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
