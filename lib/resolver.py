@@ -133,7 +133,7 @@ class GlobalRequirements():
             if dependency.looks_good:
                 self.entries.append(dependency)
         resp.close()
-        print("Done. {0} records loaded.".format(len(self.entries)))
+        print("... done. {0} records loaded.".format(len(self.entries)))
 
     def get_package(self, name):
         for package in self.entries:

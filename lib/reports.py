@@ -85,6 +85,7 @@ class ReportGenerator():
 
     def print_user_friendly_report_block(self, compatible=False, direct=False):
         table = PrettyTable([
+            'N',
             'Component Requires',
             'Global Requirements',
             'Required By'
@@ -99,15 +100,18 @@ class ReportGenerator():
         print('')
         print("{0} dependencies, {1} with global requirements".format(str_direct.upper(), str_compatible.upper()))
 
+        line_num = 1
         for key in sorted(self.data.keys()):
             item = self.data[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
                 str_parents = " -> ".join([str(p) for p in item['orig_package'].dependencies])
                 table.add_row([
+                    line_num,
                     item['orig_package'],
                     item['greq_package'],
                     str_parents
                 ])
+                line_num += 1
 
         print table
 
