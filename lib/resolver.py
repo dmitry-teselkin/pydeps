@@ -24,6 +24,10 @@ class GithubRepoDirectory():
             parts = urlparse(url=url).split('/')
             self.name = parts[-1]
             self.project = parts[-2]
+        elif '/' in name:
+            parts = name.split('/')
+            self.name = parts[-1]
+            self.project = parts[-2]
         elif name and project:
             self.name = name
             self.project = project
@@ -53,7 +57,8 @@ class GithubRepoDirectory():
             self.url = url
         else:
             self.url = "https://github.com/{0}".format(self.full_name)
-        self.path = os.path.join(self.base_path, self.full_name)
+        self.path = os.path.join(self.base_path, 'github.com', self.full_name)
+
         self.branch = branch
 
         try:
