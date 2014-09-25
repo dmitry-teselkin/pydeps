@@ -9,17 +9,26 @@ from lib.resolver import PythonPackage
 from lib.reports import ReportGenerator
 
 parser = argparse.ArgumentParser()
-parser.add_argument('name', default='murano', nargs='?')
+parser.add_argument('--name', default='murano')
+parser.add_argument('--path')
+parser.add_argument('--greq-branch', default='master')
 args = parser.parse_args()
 
-greq = GlobalRequirements(branch='master')
+package_path = ''
+greq = GlobalRequirements(branch=args.greq_branch)
 
-repo = GithubRepoDirectory(name=args.name)
-repo.status(long=True, show=True)
+if args.name:
+    repo = GithubRepoDirectory(name=args.name)
+    repo.status(long=True, show=True)
+    package_path = repo.path
 
-python_package = PythonPackage(path=repo.path)
-python_package.resolve_deps()
-python_package.validate_requirements(greq)
+if args.path:
+    package_path = args.path
 
-report = ReportGenerator(python_package=python_package)
-report.machine_friendly_report()
+if package_path:
+    python_package = PythonPackage(path=package_path)
+    python_package.resolve_deps()
+    python_package.validate_requirements(greq)
+
+    report = ReportGenerator(python_package=python_package)
+    report.machine_friendly_report()

@@ -62,7 +62,7 @@ class GithubRepoDirectory():
         self.branch = branch
 
         try:
-            if self.status():
+            if self.status(show=True):
                 self.reset()
             self.update()
         except:
