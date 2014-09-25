@@ -1,9 +1,26 @@
 
-
 class ReportGenerator():
-    def __init__(self, package_name):
-        self.package_name = package_name
+    def __init__(self, python_package):
+        self.package_name = python_package.package_name
         self.header = ''
+
+        """
+        Create a dict of dicts:
+            <package name>: {
+                'orig_package': <package found in component's requirements>,
+                'greq_package': <package found in global requirements>,
+                'status': <if package complies with global requirements>,
+                'is_direct_dependency': <if package is a direct dependency for the component>
+            }
+        """
+        self.data = {}
+        for dependency in python_package.dependencies:
+            self.data[dependency.name] = {
+                'orig_package': dependency,
+                'greq_package': dependency.global_requirement,
+                'status': dependency.is_compatible,
+                'is_direct_dependency': dependency.is_direct
+            }
 
     def _top_block_delimiter(self, header):
         self.header = header
@@ -14,7 +31,7 @@ class ReportGenerator():
     def _bottom_block_delimiter(self):
         print("=" * len(self.header))
 
-    def print_report_block(self, validation_result, compatible=False, direct=False):
+    def print_report_block(self, compatible=False, direct=False):
         str_direct = 'direct' if direct else 'indirect'
         str_compatible = 'compatible' if compatible else 'incompatible'
 
@@ -22,8 +39,8 @@ class ReportGenerator():
             str_direct.capitalize(), str_compatible
         ))
         count = 0
-        for key in sorted(validation_result.keys()):
-            item = validation_result[key]
+        for key in sorted(self.data.keys()):
+            item = self.data[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
                 count += 1
                 if item['greq_package']:
@@ -43,14 +60,14 @@ class ReportGenerator():
 
         print("Total: {0}".format(count))
 
-    def print_machine_friendly_report_block(self, validation_result, compatible=False, direct=False):
+    def print_machine_friendly_report_block(self, compatible=False, direct=False):
         str_direct = 'direct' if direct else 'indirect'
         str_compatible = 'compatible' if compatible else 'incompatible'
         delimiter = ";"
 
         print("# ---------- {0} {1} dependencies ----------".format(str_compatible, str_direct))
-        for key in sorted(validation_result.keys()):
-            item = validation_result[key]
+        for key in sorted(self.data.keys()):
+            item = self.data[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
                 str_parents = " -> ".join([str(p) for p in item['orig_package'].dependencies])
 
@@ -63,11 +80,11 @@ class ReportGenerator():
                     str_parents
                 ))
 
-    def package_matching_report_block(self, validation_result=None, repository_set=None, direct=True):
+    def package_matching_report_block(self, repository_set=None, direct=True):
         str_direct = 'direct' if direct else 'indirect'
 
-        for key in sorted(validation_result.keys()):
-            item = validation_result[key]
+        for key in sorted(self.data.keys()):
+            item = self.data[key]
             if item['is_direct_dependency'] == direct:
                 str_orig_package = str(item['orig_package'].name)
                 str_greq_package = str(item['greq_package'])
@@ -82,20 +99,16 @@ class ReportGenerator():
                         r.name
                     ))
 
-    def global_requirements_validation(self, validation_result):
+    def global_requirements_validation(self):
         print("")
         print("Report for package '{0}':".format(self.package_name))
 
-        self.print_report_block(validation_result=validation_result,
-                                compatible=True, direct=True)
-        self.print_report_block(validation_result=validation_result,
-                                compatible=False, direct=True)
-        self.print_report_block(validation_result=validation_result,
-                                compatible=True, direct=False)
-        self.print_report_block(validation_result=validation_result,
-                                compatible=False, direct=False)
+        self.print_report_block(compatible=True, direct=True)
+        self.print_report_block(compatible=False, direct=True)
+        self.print_report_block(compatible=True, direct=False)
+        self.print_report_block(compatible=False, direct=False)
 
-    def machine_friendly_report(self, validation_result):
+    def machine_friendly_report(self):
         print("")
         print("#{1:35}{0}{2:15}{0}{3:10}{0}{4:35}{0}{5}".format(
             ';',
@@ -105,21 +118,15 @@ class ReportGenerator():
             'Component Requirements',
             'Required By'
         ))
-        self.print_machine_friendly_report_block(validation_result=validation_result,
-                                                 compatible=True, direct=True)
-        self.print_machine_friendly_report_block(validation_result=validation_result,
-                                                 compatible=False, direct=True)
-        self.print_machine_friendly_report_block(validation_result=validation_result,
-                                                 compatible=True, direct=False)
-        self.print_machine_friendly_report_block(validation_result=validation_result,
-                                                 compatible=False, direct=False)
+        self.print_machine_friendly_report_block(compatible=True, direct=True)
+        self.print_machine_friendly_report_block(compatible=False, direct=True)
+        self.print_machine_friendly_report_block(compatible=True, direct=False)
+        self.print_machine_friendly_report_block(compatible=False, direct=False)
         print("")
 
-    def package_matching(self, validation_result=None, repository_set=None):
+    def package_matching(self, repository_set=None):
         print("")
         print("Looking for packages matching:")
-        self.package_matching_report_block(validation_result=validation_result,
-                                             repository_set=repository_set, direct=True)
-        self.package_matching_report_block(validation_result=validation_result,
-                                             repository_set=repository_set, direct=False)
+        self.package_matching_report_block(repository_set=repository_set, direct=True)
+        self.package_matching_report_block(repository_set=repository_set, direct=False)
         print("")

@@ -41,7 +41,7 @@ class GithubRepoDirectory():
                     len(project_list), name, project_list
                 ))
         else:
-            raise Exception("Not enough data to create GithubRepo class")
+            raise Exception('Not enough data to create GithubRepo class')
 
         if base_path:
             self.base_path = base_path
@@ -65,19 +65,25 @@ class GithubRepoDirectory():
 
     def reset(self):
         with pushd(self.path):
-            print("Updating existing repository")
+            print('')
+            print("Resetting Git repository in '{0}' ...".format(self.path))
             git('reset', '--hard')
             git('clean', '-f', '-d', '-x')
+            print('... done')
 
     def update(self):
         with pushd(self.path):
-            print("Updating existing repository")
+            print('')
+            print("Updating Git repository in '{0}' ...".format(self.path))
             git('remote', 'update')
             git('pull', '--rebase')
+            print('... done')
 
     def clone(self):
-        print("Cloning new repository")
+        print('')
+        print('Cloning new repository ...')
         git('clone', self.url, self.path)
+        print('... done')
 
     def status(self, long=False, show=False):
         opts = '--long' if long else '--short'
@@ -85,11 +91,10 @@ class GithubRepoDirectory():
             git_status = git('status', opts)
 
         if show:
-            print("")
+            print('')
             print("'git status' in '{0}':".format(self.path))
-            print("------------")
-            print(git_status)
-            print("------------")
+            for line in git_status:
+                print("| {0}".format(line.rstrip()))
 
         return git_status
 
@@ -115,9 +120,8 @@ class GlobalRequirements():
         raise Exception('Either branch or path to load Global Requirements must be provided')
 
     def _load_from_url(self, url):
-        print("")
+        print('')
         print("Loading Global Requirements from '{0}' ...".format(url))
-        print("BTW, cache dir is {0}".format(conf.CONF['cache_dir']))
         resp = urllib2.urlopen(url)
         for line in resp.readlines():
             dependency = PythonPackageDependency(line)
@@ -153,7 +157,7 @@ class PythonPackage():
         self.dependencies = []
 
         with pushd(self.path):
-            self.package_name = tail(python("setup.py", "--name"), "-1").rstrip()
+            self.package_name = tail(python('setup.py', '--name'), '-1').rstrip()
 
     def _add_dependency(self, full_name, dependents=None):
         package = PythonPackageDependency(full_name, dependency_chain=dependents)
@@ -172,8 +176,8 @@ class PythonPackage():
         rm('-r', '-f', "/tmp/pip_build_{0}".format(getuser()))
 
         with pushd(self.path):
-            print("")
-            print("Gathering package requirements ...")
+            print('')
+            print('Gathering package requirements ...')
             for line in pip('install', pip_install_opts, '.'):
                 string = line.rstrip()
                 match = re.search('Downloading/unpacking (.*?) \(from (.*?)\)', string)
@@ -186,32 +190,14 @@ class PythonPackage():
                     self._add_dependency(match.group(1), dependents=match.group(2))
                     continue
 
-        print("Done. {0} records found.".format(len(self.dependencies)))
+        print("... done. {0} records found.".format(len(self.dependencies)))
 
         return self.dependencies
 
     def validate_requirements(self, global_requirements):
-        """
-        Returns a dict of dicts:
-            <package name>: {
-                'orig_package': <package found in component's requirements>,
-                'greq_package': <package found in global requirements>,
-                'status': <if package complies with global requirements>,
-                'is_direct_dependency': <if package is a direct dependency for the component>
-            }
-        """
         for dependency in self.dependencies:
             dependency.validate(global_requirements)
-
-        result = {}
-        for dependency in self.dependencies:
-            result[dependency.name] = {
-                'orig_package': dependency,
-                'greq_package': dependency.global_requirement,
-                'status': dependency.global_requirement_status,
-                'is_direct_dependency': self.package_name == dependency.dependencies[0].name
-            }
-        return result
+            dependency.is_direct = dependency.dependencies[0].name == self.package_name
 
 
 class PythonPackageDependency():
@@ -224,8 +210,9 @@ class PythonPackageDependency():
         self._full_name = full_name.split('#')[0].rstrip()
         self._dependency_chain = dependency_chain
         self.name = ""
-        self.global_requirement = ""
-        self.global_requirement_status = ""
+        self.global_requirement = None
+        self.is_compatible = False
+        self.is_direct = False
         self.constraints = None
         self.dependencies = []
 
@@ -269,7 +256,7 @@ class PythonPackageDependency():
         return self.constraints.equals(dependency.constraints)
 
     def validate(self, global_requirements):
-        self.global_requirement_status, self.global_requirement = global_requirements.validate(self)
+        self.is_compatible, self.global_requirement = global_requirements.validate(self)
 
 
 class VersionConstraints():
