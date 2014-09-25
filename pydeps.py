@@ -31,4 +31,4 @@ if package_path:
     python_package.validate_requirements(greq)
 
     report = ReportGenerator(python_package=python_package)
-    report.machine_friendly_report()
+    report.user_friendly_report()

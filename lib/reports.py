@@ -1,4 +1,7 @@
 
+from prettytable import PrettyTable
+
+
 class ReportGenerator():
     def __init__(self, python_package):
         self.package_name = python_package.package_name
@@ -80,6 +83,34 @@ class ReportGenerator():
                     str_parents
                 ))
 
+    def print_user_friendly_report_block(self, compatible=False, direct=False):
+        table = PrettyTable([
+            'Component Requires',
+            'Global Requirements',
+            'Required By'
+        ])
+        table.align['Global Requirements'] = 'l'
+        table.align['Component Requires'] = 'l'
+        table.align['Required By'] = 'l'
+
+        str_direct = 'direct' if direct else 'indirect'
+        str_compatible = 'compatible' if compatible else 'incompatible'
+
+        print('')
+        print("{0} dependencies, {1} with global requirements".format(str_direct.upper(), str_compatible.upper()))
+
+        for key in sorted(self.data.keys()):
+            item = self.data[key]
+            if item['status'] == compatible and item['is_direct_dependency'] == direct:
+                str_parents = " -> ".join([str(p) for p in item['orig_package'].dependencies])
+                table.add_row([
+                    item['orig_package'],
+                    item['greq_package'],
+                    str_parents
+                ])
+
+        print table
+
     def package_matching_report_block(self, repository_set=None, direct=True):
         str_direct = 'direct' if direct else 'indirect'
 
@@ -123,6 +154,12 @@ class ReportGenerator():
         self.print_machine_friendly_report_block(compatible=True, direct=False)
         self.print_machine_friendly_report_block(compatible=False, direct=False)
         print("")
+
+    def user_friendly_report(self):
+        self.print_user_friendly_report_block(compatible=True, direct=True)
+        self.print_user_friendly_report_block(compatible=False, direct=True)
+        self.print_user_friendly_report_block(compatible=True, direct=False)
+        self.print_user_friendly_report_block(compatible=False, direct=False)
 
     def package_matching(self, repository_set=None):
         print("")
