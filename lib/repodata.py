@@ -23,9 +23,54 @@ from urlparse import urlparse
 import settings as conf
 
 
-class RepositoryUrl():
-    def __init__(self, dist='ubuntu'):
-        pass
+class RepodataUrl():
+    def __init__(self, product_name, product_version='', product_release='',
+                dist='', codename='', component='', arch=''):
+        if product_name == 'fuel':
+            product_release = product_release or 'master'
+            dist = dist or 'ubuntu'
+        elif product_name == 'ubuntu':
+            dist = 'ubuntu'
+        elif product_name == 'centos':
+            dist = 'centos'
+
+        if dist == 'ubuntu':
+            codename = codename or 'precise'
+            component = component or 'main'
+            arch = arch or 'amd64'
+        elif dist == 'centos':
+            arch = arch or 'x86_64'
+
+        self.fields = {
+            'product_name': product_name,
+            'product_version': product_version,
+            'product_release': product_release,
+            'dist': dist,
+            'codename': codename,
+            'component': component,
+            'arch': arch
+        }
+
+        url_prefix = {
+            'fuel': 'http://fuel-repository.mirantis.com',
+            'osci': '',
+            'ubuntu': 'http://archive.ubuntu.com',
+            'centos': ''
+        }.get(product_name, '')
+
+        url_product_suffix = {
+            'fuel-release': 'fwm/{product_version}/{dist}',
+            'fuel-stable': 'osci/{dist}-fuel-{product_version}-stable/{dist}',
+            'fuel-testing': 'osci/{dist}-fuel-{product_version}-testing/{dist}',
+            'fuel-master': 'osci/{dist}-fuel-master',
+        }.get('{product_name}-{product_release}'.format(**self.fields), '')
+
+        url_dist_suffix = {
+            'ubuntu': 'dists/{codename}/{component}/binary-{arch}',
+            'centos': 'os/{arch}',
+        }.get(dist, '')
+
+        self.url = '/'.join([url_prefix, url_product_suffix, url_dist_suffix])
 
 
 class Repodata():
