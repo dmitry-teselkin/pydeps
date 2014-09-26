@@ -151,7 +151,7 @@ class DebMetadata(Repodata):
                 )
             ]
         except Exception as err:
-            print(str(err))
+            #print(str(err))
             return []
 
     def update_cache(self):

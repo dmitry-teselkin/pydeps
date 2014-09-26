@@ -39,13 +39,13 @@ if package_path:
     report.user_friendly_report()
 
 '''
-repo_url = RepodataUrl(product_name='fuel', product_release='release', product_version='5.1')
+repo_url = RepodataUrl(product_name='fuel', product_release='master', product_version='5.1')
 print(repo_url.url)
 
 deb_repo = DebMetadata(repo_url=repo_url)
 deb_repo.update_cache()
 
-murano_packages = deb_repo.grep_package(name='argparse')
+murano_packages = deb_repo.grep_package(name='python-requests')
 for p in murano_packages:
     print p
 '''

@@ -42,7 +42,7 @@ class ReportGenerator():
             str_direct.capitalize(), str_compatible
         ))
         count = 0
-        for key in sorted(self.data.keys()):
+        for key in sorted(self.data.keys(), key=lambda s: s.lower()):
             item = self.data[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
                 count += 1
@@ -69,7 +69,7 @@ class ReportGenerator():
         delimiter = ";"
 
         print("# ---------- {0} {1} dependencies ----------".format(str_compatible, str_direct))
-        for key in sorted(self.data.keys()):
+        for key in sorted(self.data.keys(), key=lambda s: s.lower()):
             item = self.data[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
                 str_parents = " -> ".join([str(p) for p in item['orig_package'].dependencies])
@@ -101,7 +101,7 @@ class ReportGenerator():
         print("{0} dependencies, {1} with global requirements".format(str_direct.upper(), str_compatible.upper()))
 
         line_num = 1
-        for key in sorted(self.data.keys()):
+        for key in sorted(self.data.keys(), key=lambda s: s.lower()):
             item = self.data[key]
             if item['status'] == compatible and item['is_direct_dependency'] == direct:
                 str_parents = " -> ".join([str(p) for p in item['orig_package'].dependencies])
@@ -118,7 +118,7 @@ class ReportGenerator():
     def package_matching_report_block(self, repository_set=None, direct=True):
         str_direct = 'direct' if direct else 'indirect'
 
-        for key in sorted(self.data.keys()):
+        for key in sorted(self.data.keys(), key=lambda s: s.lower()):
             item = self.data[key]
             if item['is_direct_dependency'] == direct:
                 str_orig_package = str(item['orig_package'].name)
