@@ -10,6 +10,8 @@ from lib.reports import ReportGenerator
 
 from lib.repodata import DebMetadata
 
+from lib.repodata import RepodataUrl
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default='murano')
 parser.add_argument('--path')
@@ -37,12 +39,10 @@ if package_path:
     report.user_friendly_report()
 
 '''
-# http://fuel-repository.mirantis.com/fwm/5.1/ubuntu/dists/precise/main/binary-amd64/
+repo_url = RepodataUrl(product_name='fuel', product_release='release', product_version='5.1')
+print(repo_url.url)
 
-deb_repo = DebMetadata(url='http://fuel-repository.mirantis.com/fwm/5.1/ubuntu',
-           codename='precise',
-           arch='amd64',
-           component='main')
+deb_repo = DebMetadata(repo_url=repo_url)
 deb_repo.update_cache()
 
 murano_packages = deb_repo.grep_package(name='argparse')

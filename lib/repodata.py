@@ -28,11 +28,14 @@ class RepodataUrl():
                 dist='', codename='', component='', arch=''):
         if product_name == 'fuel':
             product_release = product_release or 'master'
+            product_version = product_version or '6.0'
             dist = dist or 'ubuntu'
         elif product_name == 'ubuntu':
             dist = 'ubuntu'
+            product_release = ''
         elif product_name == 'centos':
             dist = 'centos'
+            product_release = ''
 
         if dist == 'ubuntu':
             codename = codename or 'precise'
@@ -41,7 +44,7 @@ class RepodataUrl():
         elif dist == 'centos':
             arch = arch or 'x86_64'
 
-        self.fields = {
+        self.kwargs = {
             'product_name': product_name,
             'product_version': product_version,
             'product_release': product_release,
@@ -54,7 +57,7 @@ class RepodataUrl():
         url_prefix = {
             'fuel': 'http://fuel-repository.mirantis.com',
             'osci': '',
-            'ubuntu': 'http://archive.ubuntu.com',
+            'ubuntu': 'http://archive.ubuntu.com/ubuntu',
             'centos': ''
         }.get(product_name, '')
 
@@ -62,19 +65,24 @@ class RepodataUrl():
             'fuel-release': 'fwm/{product_version}/{dist}',
             'fuel-stable': 'osci/{dist}-fuel-{product_version}-stable/{dist}',
             'fuel-testing': 'osci/{dist}-fuel-{product_version}-testing/{dist}',
-            'fuel-master': 'osci/{dist}-fuel-master',
-        }.get('{product_name}-{product_release}'.format(**self.fields), '')
+            'fuel-master': 'osci/{dist}-fuel-master/{dist}',
+        }.get('{product_name}-{product_release}'.format(**self.kwargs), '')
 
         url_dist_suffix = {
-            'ubuntu': 'dists/{codename}/{component}/binary-{arch}',
-            'centos': 'os/{arch}',
-        }.get(dist, '')
+            'fuel-release-ubuntu': 'dists/{codename}/{component}/binary-{arch}',
+            'ubuntu--ubuntu': 'dists/{codename}/{component}/binary-{arch}',
+            'fuel-release-centos': 'os/{arch}',
+            'centos--centos': 'os/{arch}',
+        }.get('{product_name}-{product_release}-{dist}'.format(**self.kwargs), '')
 
-        self.url = '/'.join([url_prefix, url_product_suffix, url_dist_suffix])
+        self.url_prefix = url_prefix
+        self.url_suffix = '/'.join([url_product_suffix, url_dist_suffix]).format(**self.kwargs)
+
+        self.url = urlparse(url='/'.join([self.url_prefix, self.url_suffix]))
 
 
 class Repodata():
-    def __init__(self, url, base_path=None):
+    def __init__(self, repo_url, base_path=None):
         # Base path where files related to the repository are located
         self.base_path = base_path if base_path else conf.CONF['cache_dir']
         self.path = ''
@@ -85,9 +93,7 @@ class Repodata():
         self.cache_threshold_sec = 60 * 60
 
         self.broken = False
-        self.url = urlparse(url=url)
-
-        self.repo_url = ''
+        self.repo_url = repo_url
 
     def grep_package(self, name, pattern=None):
         pass
@@ -111,7 +117,7 @@ class Repodata():
         pass
 
     def __str__(self):
-        index_file_url = '/'.join([self.repo_url, self.index_file])
+        index_file_url = '/'.join([self.repo_url.url_suffix, self.index_file])
         index_file_path = os.path.join(self.path, self.index_file)
 
         return "Remote URL: {0}, Cached file: {1}".format(
@@ -121,15 +127,12 @@ class Repodata():
 
 
 class DebMetadata(Repodata):
-    def __init__(self, url, codename='precise', arch='amd64', component='main', base_path=None):
-        Repodata.__init__(self, url=url, base_path=base_path)
+    def __init__(self, repo_url, base_path=None):
+        Repodata.__init__(self, repo_url=repo_url, base_path=base_path)
 
         self.index_file = 'Packages'
 
-        self.path = os.path.normpath(os.path.join(self.base_path, self.url.netloc, '.' + self.url.path,
-                                                  codename, component, 'binary-' + arch))
-
-        self.repo_url = '/'.join([self.url.geturl(), 'dists', codename, component, 'binary-' + arch])
+        self.path = os.path.normpath(os.path.join(self.base_path, self.repo_url.url.netloc, self.repo_url.url_suffix))
 
     def grep_package(self, name, pattern=None):
         pattern = pattern if pattern else "{0}"
@@ -156,7 +159,7 @@ class DebMetadata(Repodata):
             rm(self.path, '-rf')
             mkdir('-p', self.path)
 
-            index_file_url = '/'.join([self.repo_url, 'Packages.gz'])
+            index_file_url = '/'.join([self.repo_url.url.geturl(), 'Packages.gz'])
             index_file_path = os.path.join(self.path, self.index_file)
 
             print("Downloading index file '{0}' --> '{1}' ...".format(
