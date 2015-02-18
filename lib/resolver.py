@@ -12,14 +12,17 @@ from sh import python
 from getpass import getuser
 
 from urlparse import urlparse
+from urlparse import urljoin
 
 from utils import pushd
 
 import settings as conf
 
 
-class GithubRepoDirectory():
-    def __init__(self, project=None, name=None, branch='master', url=None, base_path=None):
+class GitRepository():
+    def __init__(self, name=None, project=None, branch='master',
+                 git_base='https://github.com', url=None,
+                 cache_base='~/.cache/git'):
         if url:
             parts = urlparse(url=url).split('/')
             self.name = parts[-1]
@@ -45,25 +48,26 @@ class GithubRepoDirectory():
                     len(project_list), name, project_list
                 ))
         else:
-            raise Exception('Not enough data to create GithubRepo class')
+            raise Exception('Not enough data to create GitRepository')
 
-        if base_path:
-            self.base_path = base_path
-        else:
-            self.base_path = conf.CONF['cache_dir']
-
+        self.cache_base = os.path.expanduser(cache_base)
+        self.cache_base = os.path.expandvars(self.cache_base)
         self.full_name = '/'.join((self.project, self.name))
+
         if url:
             self.url = url
         else:
-            self.url = "https://github.com/{0}".format(self.full_name)
-        self.path = os.path.join(self.base_path, 'github.com', self.full_name)
+            self.url = urljoin(git_base, '/'.join((self.project, self.name)))
+
+        parts = urlparse(url=git_base)
+        self.path = os.path.join(self.cache_base, parts.netloc, self.project, self.name)
 
         self.branch = branch
 
         try:
             if self.status(show=True):
                 self.reset()
+            self.checkout(branch=self.branch)
             self.update()
         except:
             self.clone()
@@ -86,7 +90,7 @@ class GithubRepoDirectory():
 
     def clone(self):
         print('')
-        print('Cloning new repository ...')
+        print('Cloning repository to {0} ...'.format(self.path))
         git('clone', self.url, self.path)
         print('... done')
 
@@ -103,10 +107,20 @@ class GithubRepoDirectory():
 
         return git_status
 
+    def checkout(self, branch=None):
+        if not branch:
+            raise Exception("No branch given to chechout")
+        with pushd(self.path):
+            print('')
+            print("Switching to branch '{0}' ...".format(branch))
+            git('checkout', branch)
+            print('... done')
+
 
 class GlobalRequirements():
     def __init__(self, branch=None, path=None):
-        self.entries = []
+        self.entries = list()
+        self.aliases = dict()
 
         if branch:
             branch = {
@@ -124,6 +138,13 @@ class GlobalRequirements():
 
         raise Exception('Either branch or path to load Global Requirements must be provided')
 
+    def add_alias(self, name, aliases):
+        if type(aliases) is not list:
+            aliases = [aliases]
+        self.aliases[name] = self.aliases.get(name, []) + aliases
+        for alias in aliases:
+            self.aliases[alias] = self.aliases.get(alias, []) + [name]
+
     def _load_from_url(self, url):
         print('')
         print("Loading Global Requirements from '{0}' ...".format(url))
@@ -136,12 +157,19 @@ class GlobalRequirements():
         print("... done. {0} records loaded.".format(len(self.entries)))
 
     def get_package(self, name):
+        names = list()
+        names.append(name)
+        names.extend(self.aliases.get(name, []))
+        print(names)
         for package in self.entries:
-            if package.name == name:
+            if package.name in names:
                 return package
 
     def validate(self, package):
-        names = [n.name for n in self.entries]
+        names = list()
+        for n in self.entries:
+            names.append(n.name)
+            names.extend(self.aliases.get(n.name, []))
         if package.name in names:
             greq_package = self.get_package(package.name)
             if greq_package.equals(package):

@@ -3,7 +3,7 @@
 import argparse
 
 from lib.resolver import GlobalRequirements
-from lib.resolver import GithubRepoDirectory
+from lib.resolver import GitRepository
 from lib.resolver import PythonPackage
 
 from lib.reports import ReportGenerator
@@ -12,23 +12,33 @@ from lib.repodata import DebMetadata
 
 from lib.repodata import RepodataUrl
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', default='murano')
-parser.add_argument('--path')
-parser.add_argument('--greq-branch', default='master')
+#parser.add_argument('--path')
+parser.add_argument('--branch', default='master')
+parser.add_argument('--greq-branch')
 args = parser.parse_args()
 
+if args.greq_branch:
+    greq_branch = args.greq_branch
+else:
+    greq_branch = args.branch
 
 package_path = ''
-greq = GlobalRequirements(branch=args.greq_branch)
+greq = GlobalRequirements(branch=greq_branch)
+greq.add_alias('glance_store', 'glance-store')
+greq.add_alias('posix_ipc', 'posix-ipc')
+
+
+#if args.path:
+#    package_path = args.path
 
 if args.name:
-    repo = GithubRepoDirectory(name=args.name)
+    #repo = GithubRepoDirectory(name=args.name)
+    repo = GitRepository(name=args.name, branch=args.branch)
     repo.status(long=True, show=True)
     package_path = repo.path
-
-if args.path:
-    package_path = args.path
 
 if package_path:
     python_package = PythonPackage(path=package_path)
